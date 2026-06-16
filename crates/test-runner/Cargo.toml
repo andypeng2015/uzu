@@ -24,4 +24,6 @@ macmon.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 objc2 = { workspace = true, optional = true }
-objc2-foundation = { workspace = true, optional = true }
+# Required (not optional): `ios_set_current_dir` in path.rs uses Foundation
+# unconditionally on iOS, so iOS test/bench builds must link it.
+objc2-foundation = { workspace = true }

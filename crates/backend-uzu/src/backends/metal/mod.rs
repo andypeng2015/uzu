@@ -11,4 +11,6 @@ mod sparse;
 
 pub use backend::Metal;
 pub use context::MetalContext;
+// Experimental hybrid MXU+ALU GEMM kernel. Wrapped by `crate::experiments`.
+pub(crate) use kernel::GemmMixedMetalKernel;
 pub use kernel::matmul::GemmDispatchPath;

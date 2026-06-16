@@ -15,6 +15,10 @@ mod utils;
 
 pub mod backends;
 pub mod data_type;
+// Public harness for one-off kernel experiments (e.g. the hybrid MXU+ALU GEMM),
+// so they can be driven from a dinghy-runnable bench target on device.
+#[cfg(metal_backend)]
+pub mod experiments;
 pub mod inference;
 pub mod session;
 
