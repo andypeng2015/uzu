@@ -173,7 +173,7 @@ pub async fn write(
     Ok(())
 }
 
-async fn resolve_parent(
+pub(crate) async fn resolve_parent(
     root: &opfs::persistent::DirectoryHandle,
     path: &str,
     create: bool,
@@ -196,10 +196,10 @@ async fn resolve_parent(
     Ok((dir, name))
 }
 
-async fn get_root_dir() -> io::Result<opfs::persistent::DirectoryHandle> {
+pub(crate) async fn get_root_dir() -> io::Result<opfs::persistent::DirectoryHandle> {
     app_specific_dir().await.map_err(js_value_to_error)
 }
 
-fn js_value_to_error(value: JsValue) -> io::Error {
+pub(crate) fn js_value_to_error(value: JsValue) -> io::Error {
     io::Error::new(ErrorKind::Other, value.as_string().unwrap())
 }

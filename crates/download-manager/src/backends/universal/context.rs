@@ -9,18 +9,14 @@ use reqwest::{
     StatusCode,
     header::{CONTENT_LENGTH, CONTENT_RANGE, RANGE},
 };
-use tokio::{
-    fs::{File as TokioFile, OpenOptions as TokioOpenOptions},
-    io::AsyncWriteExt,
-    runtime::Handle as TokioHandle,
-};
+use tokio::runtime::Handle as TokioHandle;
 
 use crate::{
     backends::universal::{UniversalActiveTask, UniversalBackend, UniversalBackendError},
     file_download_task_actor::BackendEvent,
     lock_manager::DestinationLockLease,
     traits::{ActiveDownloadGeneration, BackendContext, BackendEventSender, DownloadConfig},
-    util::filesystem,
+    util::{file::PartFile, filesystem},
 };
 
 #[derive(Clone, Debug)]
@@ -211,7 +207,8 @@ async fn download_once(
         .map(|remaining_bytes| remaining_bytes.saturating_add(resume_from_bytes))
         .or(config.expected_bytes);
 
-    let mut file = open_part_file(resume_artifact_path, resume_from_bytes).await.map_err(|error| error.to_string())?;
+    let mut file =
+        <dyn PartFile>::new(resume_artifact_path, resume_from_bytes).await.map_err(|error| error.to_string())?;
     let mut downloaded_bytes = resume_from_bytes;
     let mut last_progress_emit =
         std::time::Instant::now().checked_sub(progress_interval).unwrap_or_else(std::time::Instant::now);
@@ -231,17 +228,6 @@ async fn download_once(
     file.flush().await.map_err(|error| error.to_string())?;
     backend_event_sender.send_progress(generation, downloaded_bytes, total_bytes.or(Some(downloaded_bytes))).await;
     filesystem::rename(resume_artifact_path, &config.destination).await.map_err(|error| error.to_string())
-}
-
-async fn open_part_file(
-    resume_artifact_path: &Path,
-    resume_from_bytes: u64,
-) -> Result<TokioFile, std::io::Error> {
-    if resume_from_bytes > 0 {
-        TokioOpenOptions::new().create(true).append(true).open(resume_artifact_path).await
-    } else {
-        TokioOpenOptions::new().create(true).write(true).truncate(true).open(resume_artifact_path).await
-    }
 }
 
 fn parse_content_range_start(header_value: &str) -> Option<u64> {
