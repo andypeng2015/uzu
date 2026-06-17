@@ -18,6 +18,7 @@ use crate::{
     file_download_task_actor::{BackendEvent, PendingProgressSlot},
     lock_manager::DestinationLockLease,
     traits::{ActiveDownloadGeneration, BackendContext, BackendEventSender, DownloadConfig},
+    util::filesystem,
 };
 
 fn backend_event_sender() -> (BackendEventSender, TokioMpscReceiver<BackendEvent>) {
@@ -37,7 +38,7 @@ async fn test_apple_resume_empty_resume_data_starts_fresh_download() -> Result<(
     let temporary_directory = tempfile::tempdir()?;
     let destination = temporary_directory.path().join(&served_file.file.name);
     let resume_artifact_path = destination.with_extension("resume_data");
-    tokio::fs::write(&resume_artifact_path, b"").await?;
+    filesystem::write(&resume_artifact_path, b"").await?;
 
     let context = AppleBackendContext::new(TokioHandle::current());
     let config = Arc::new(DownloadConfig {
@@ -71,7 +72,7 @@ async fn test_apple_resume_empty_resume_data_starts_fresh_download() -> Result<(
         })?;
 
     assert_eq!(event, BackendEvent::completed(generation));
-    assert_eq!(tokio::fs::read(&destination).await?, served_file.bytes.to_vec());
+    assert_eq!(filesystem::read(&destination).await?, served_file.bytes.to_vec());
 
     drop(active_task);
     destination_lease.release().await?;
@@ -151,12 +152,7 @@ async fn registry_distinguishes_generations_for_same_download_id() -> Result<(),
 
     let (backend_event_sender_first, _backend_event_receiver_first) = backend_event_sender();
     let first_task = context
-        .download(
-            Arc::clone(&config),
-            ActiveDownloadGeneration::new(0),
-            backend_event_sender_first,
-            &destination_lease,
-        )
+        .download(Arc::clone(&config), ActiveDownloadGeneration::new(0), backend_event_sender_first, &destination_lease)
         .await?;
     assert_eq!(
         context.event_sink_task_identifiers_for_download(download_id).len(),

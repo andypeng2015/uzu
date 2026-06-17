@@ -5,6 +5,7 @@ use crate::{
     crc_utils::save_crc_file,
     lock_manager::DestinationLockLease,
     reducer::{Action, ActionPlan},
+    util::filesystem,
 };
 
 pub async fn apply_actions(
@@ -37,7 +38,7 @@ pub async fn apply_actions(
 }
 
 async fn remove_file_if_present(path: &Path) -> Result<(), DownloadError> {
-    match tokio::fs::remove_file(path).await {
+    match filesystem::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(DownloadError::from(error)),

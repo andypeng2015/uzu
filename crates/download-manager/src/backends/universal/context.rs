@@ -20,6 +20,7 @@ use crate::{
     file_download_task_actor::BackendEvent,
     lock_manager::DestinationLockLease,
     traits::{ActiveDownloadGeneration, BackendContext, BackendEventSender, DownloadConfig},
+    util::filesystem,
 };
 
 #[derive(Clone, Debug)]
@@ -75,7 +76,7 @@ impl UniversalBackendContext {
         backend_event_sender: BackendEventSender,
     ) -> Result<UniversalActiveTask, UniversalBackendError> {
         if let Some(parent) = config.destination.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|error| UniversalBackendError::Io(error.to_string()))?;
+            filesystem::create_dir_all(parent).await.map_err(|error| UniversalBackendError::Io(error.to_string()))?;
         }
 
         let retry_count = self.retries;
@@ -156,8 +157,7 @@ async fn download_once(
     progress_interval: Duration,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
-    let resume_from_bytes =
-        tokio::fs::metadata(resume_artifact_path).await.ok().map(|metadata| metadata.len()).unwrap_or(0);
+    let resume_from_bytes = filesystem::file_length(resume_artifact_path).await.unwrap_or(0);
     let mut request = client.get(&config.source_url);
     if resume_from_bytes > 0 {
         request = request.header(RANGE, format!("bytes={resume_from_bytes}-"));
@@ -189,11 +189,11 @@ async fn download_once(
                     content_range.as_ref().and_then(|header| header.to_str().ok()).and_then(parse_content_range_total);
                 if advertised_total == Some(resume_from_bytes) {
                     backend_event_sender.send_progress(generation, resume_from_bytes, Some(resume_from_bytes)).await;
-                    return tokio::fs::rename(resume_artifact_path, &config.destination)
+                    return filesystem::rename(resume_artifact_path, &config.destination)
                         .await
                         .map_err(|error| error.to_string());
                 }
-                let _ = tokio::fs::remove_file(resume_artifact_path).await;
+                let _ = filesystem::remove_file(resume_artifact_path).await;
                 return Err(format!("server did not honor range request: status {status}"));
             },
             _ => return Err(format!("server did not honor range request: status {status}")),
@@ -230,7 +230,7 @@ async fn download_once(
 
     file.flush().await.map_err(|error| error.to_string())?;
     backend_event_sender.send_progress(generation, downloaded_bytes, total_bytes.or(Some(downloaded_bytes))).await;
-    tokio::fs::rename(resume_artifact_path, &config.destination).await.map_err(|error| error.to_string())
+    filesystem::rename(resume_artifact_path, &config.destination).await.map_err(|error| error.to_string())
 }
 
 async fn open_part_file(

@@ -1,12 +1,13 @@
 use std::{path::PathBuf, sync::Arc};
 
-use download_manager::{
-    DownloadError, FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase,
-};
+use download_manager::{DownloadError, FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase};
 use rstest::rstest;
 use tokio::runtime::Handle as TokioHandle;
 
-use crate::common::{Behavior, MockRegistry, wait_for_phase};
+use crate::{
+    common::{Behavior, MockRegistry, wait_for_phase},
+    util::filesystem,
+};
 
 #[rstest]
 #[case::universal(FileDownloadManagerType::Universal, "part")]
@@ -19,7 +20,7 @@ async fn remove_paused_task_deletes_resume_artifact(
     let temporary_directory = tempfile::tempdir()?;
     let destination = temporary_directory.path().join("model.bin");
     let resume_artifact = destination.with_extension(resume_artifact_extension);
-    tokio::fs::write(&resume_artifact, b"partial").await?;
+    filesystem::write(&resume_artifact, b"partial").await?;
 
     let manager = <dyn FileDownloadManager>::new(download_manager_type, TokioHandle::current()).await?;
     let task = manager

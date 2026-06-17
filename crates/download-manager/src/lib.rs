@@ -14,6 +14,7 @@ mod file_state;
 mod lock_file_info;
 mod lock_file_state;
 mod lock_manager;
+mod util;
 
 pub(crate) mod backends;
 pub(crate) mod file_download_task_actor;

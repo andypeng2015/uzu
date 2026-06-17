@@ -19,6 +19,7 @@ use crate::{
     },
     lock_manager::DestinationLockLease,
     traits::{ActiveDownloadGeneration, BackendContext, BackendEventSender, DownloadConfig},
+    util::filesystem,
 };
 
 pub struct AppleBackendContext {
@@ -232,7 +233,7 @@ impl BackendContext for AppleBackendContext {
         _destination_lease: &DestinationLockLease,
     ) -> Result<AppleActiveTask, AppleBackendError> {
         let resume_data =
-            tokio::fs::read(resume_artifact_path).await.map_err(|error| AppleBackendError::Io(error.to_string()))?;
+            filesystem::read(resume_artifact_path).await.map_err(|error| AppleBackendError::Io(error.to_string()))?;
         let task = if resume_data.is_empty() {
             let ns_url =
                 NSURL::URLWithString(&NSString::from_str(&config.source_url)).ok_or(AppleBackendError::BadUrl)?;

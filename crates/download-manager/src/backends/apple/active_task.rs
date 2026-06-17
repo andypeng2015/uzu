@@ -14,6 +14,7 @@ use crate::{
         task_ext::AppleDownloadTaskExt,
     },
     traits::{ActiveTask, CancelOutcome, DownloadBackend},
+    util::filesystem,
 };
 
 #[derive(Debug)]
@@ -83,7 +84,7 @@ impl ActiveTask for AppleActiveTask {
         }
         let resume_data_bytes =
             resume_data_receiver.await.map_err(|error| AppleBackendError::ResumeData(error.to_string()))?;
-        tokio::fs::write(&resume_artifact_path, resume_data_bytes)
+        filesystem::write(&resume_artifact_path, resume_data_bytes)
             .await
             .map_err(|error| AppleBackendError::Io(error.to_string()))?;
         Ok(resume_artifact_path)

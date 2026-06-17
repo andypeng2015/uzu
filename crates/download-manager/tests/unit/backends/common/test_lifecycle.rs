@@ -1,4 +1,4 @@
-use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase};
+use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase, util::filesystem};
 use rstest::rstest;
 use tokio::runtime::Handle as TokioHandle;
 
@@ -9,7 +9,7 @@ use crate::common::{MockRegistry, wait_for_phase};
 #[cfg_attr(target_vendor = "apple", case::apple(FileDownloadManagerType::Apple))]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_download_fresh_completes(
-    #[case] download_manager_type: FileDownloadManagerType,
+    #[case] download_manager_type: FileDownloadManagerType
 ) -> Result<(), Box<dyn std::error::Error>> {
     let registry = MockRegistry::start().await?;
     let tokenizer = registry.file("tokenizer.json")?;
@@ -33,7 +33,7 @@ async fn test_download_fresh_completes(
 
     assert_eq!(state.downloaded_bytes, tokenizer.file.size as u64);
     assert_eq!(state.total_bytes, tokenizer.file.size as u64);
-    assert_eq!(tokio::fs::read(&destination).await.unwrap(), tokenizer.bytes.to_vec());
+    assert_eq!(filesystem::read(&destination).await.unwrap(), tokenizer.bytes.to_vec());
     assert!(std::path::PathBuf::from(format!("{}.crc", destination.display())).is_file());
     Ok(())
 }

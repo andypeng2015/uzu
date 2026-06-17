@@ -3,7 +3,7 @@ use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, 
 use tempfile::tempdir;
 use tokio::runtime::Handle as TokioHandle;
 
-use crate::common::MockRegistry;
+use crate::{common::MockRegistry, util::filesystem};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_manager_startup_valid_existing_file_is_downloaded() -> Result<(), Box<dyn std::error::Error>> {
@@ -14,14 +14,20 @@ async fn test_manager_startup_valid_existing_file_is_downloaded() -> Result<(), 
     let destination = temporary_directory.path().join(&served_file.file.name);
     let crc_path = std::path::PathBuf::from(format!("{}.crc", destination.display()));
     let resume_artifact = destination.with_extension("part");
-    tokio::fs::write(&destination, served_file.bytes.as_ref()).await?;
-    tokio::fs::write(&resume_artifact, b"partial").await?;
+    filesystem::write(&destination, served_file.bytes.as_ref()).await?;
+    filesystem::write(&resume_artifact, b"partial").await?;
 
-    let task = manager_task(&served_file.file.url, &destination, FileCheck::CRC(expected_crc.clone()), Some(served_file.file.size as u64)).await?;
+    let task = manager_task(
+        &served_file.file.url,
+        &destination,
+        FileCheck::CRC(expected_crc.clone()),
+        Some(served_file.file.size as u64),
+    )
+    .await?;
 
     assert_eq!(task.state().await.phase, FileDownloadPhase::Downloaded);
     assert!(!resume_artifact.exists());
-    let crc_receipt: serde_json::Value = serde_json::from_str(&tokio::fs::read_to_string(crc_path).await?)?;
+    let crc_receipt: serde_json::Value = serde_json::from_str(&filesystem::read_to_string(crc_path).await?)?;
     assert_eq!(crc_receipt["version"].as_u64(), Some(1));
     assert_eq!(crc_receipt["crc"].as_str(), Some(expected_crc.as_str()));
     assert_eq!(crc_receipt["file_size"].as_u64(), Some(served_file.file.size as u64));
@@ -40,8 +46,8 @@ async fn test_manager_startup_rejects_legacy_crc_cache_after_file_changes() -> R
     let crc_path = std::path::PathBuf::from(format!("{}.crc", destination.display()));
     let mut stale_destination_bytes = served_file.bytes.to_vec();
     stale_destination_bytes[0] = stale_destination_bytes[0].wrapping_add(1);
-    tokio::fs::write(&destination, stale_destination_bytes).await?;
-    tokio::fs::write(&crc_path, &expected_crc).await?;
+    filesystem::write(&destination, stale_destination_bytes).await?;
+    filesystem::write(&crc_path, &expected_crc).await?;
 
     let task = manager_task(
         &served_file.file.url,
@@ -66,8 +72,8 @@ async fn test_manager_startup_revalidates_stale_metadata_crc_cache() -> Result<(
     let crc_path = std::path::PathBuf::from(format!("{}.crc", destination.display()));
     let mut stale_destination_bytes = served_file.bytes.to_vec();
     stale_destination_bytes[0] = stale_destination_bytes[0].wrapping_add(1);
-    tokio::fs::write(&destination, stale_destination_bytes).await?;
-    tokio::fs::write(
+    filesystem::write(&destination, stale_destination_bytes).await?;
+    filesystem::write(
         &crc_path,
         serde_json::to_vec(&serde_json::json!({
             "version": 1,
@@ -79,7 +85,13 @@ async fn test_manager_startup_revalidates_stale_metadata_crc_cache() -> Result<(
     )
     .await?;
 
-    let task = manager_task(&served_file.file.url, &destination, FileCheck::CRC(expected_crc), Some(served_file.file.size as u64)).await?;
+    let task = manager_task(
+        &served_file.file.url,
+        &destination,
+        FileCheck::CRC(expected_crc),
+        Some(served_file.file.size as u64),
+    )
+    .await?;
 
     assert_eq!(task.state().await.phase, FileDownloadPhase::NotDownloaded);
     assert!(!destination.exists());
@@ -92,7 +104,7 @@ async fn test_manager_startup_directory_destination_is_not_downloaded() -> Resul
     let served_file = registry.file("config.json")?;
     let temporary_directory = tempdir()?;
     let destination = temporary_directory.path().join(&served_file.file.name);
-    tokio::fs::create_dir(&destination).await?;
+    filesystem::create_dir(&destination).await?;
 
     let task = manager_task(&served_file.file.url, &destination, FileCheck::None, None).await?;
 
@@ -109,10 +121,10 @@ async fn test_manager_startup_foreign_lock_preserves_files() -> Result<(), Box<d
     let crc_path = std::path::PathBuf::from(format!("{}.crc", destination.display()));
     let resume_artifact = destination.with_extension("part");
     let lock_path = std::path::PathBuf::from(format!("{}.lock", destination.display()));
-    tokio::fs::write(&destination, b"corrupt").await?;
-    tokio::fs::write(&crc_path, served_file.crc32c()?).await?;
-    tokio::fs::write(&resume_artifact, b"partial").await?;
-    tokio::fs::write(
+    filesystem::write(&destination, b"corrupt").await?;
+    filesystem::write(&crc_path, served_file.crc32c()?).await?;
+    filesystem::write(&resume_artifact, b"partial").await?;
+    filesystem::write(
         &lock_path,
         serde_json::to_vec(&serde_json::json!({
             "manager_id": "foreign-manager",

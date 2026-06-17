@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-use crate::{LockFileInfo, LockFileState};
+use crate::{LockFileInfo, LockFileState, util::filesystem};
 
 const LOCK_TIMEOUT_MINUTES: i64 = 30;
 
@@ -97,7 +96,7 @@ pub async fn acquire_lock(
     let lock_contents = serde_json::to_string_pretty(&lock_info).map_err(std::io::Error::other)?;
 
     if let Some(parent) = lock_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
+        filesystem::create_dir_all(parent).await?;
     }
 
     match write_new_lock_file(lock_path, lock_contents.as_bytes()).await {
@@ -143,29 +142,24 @@ async fn write_new_lock_file(
     lock_contents: &[u8],
 ) -> Result<(), std::io::Error> {
     let temporary_lock_path = lock_path.with_extension(format!("lock-tmp-{}", Uuid::new_v4()));
-    let temporary_result = async {
-        let mut file = tokio::fs::OpenOptions::new().write(true).create_new(true).open(&temporary_lock_path).await?;
-        file.write_all(lock_contents).await?;
-        file.sync_all().await
-    }
-    .await;
+    let temporary_result = filesystem::write_with_sync_all(&temporary_lock_path, &lock_contents).await;
     if let Err(error) = temporary_result {
-        let _ = tokio::fs::remove_file(&temporary_lock_path).await;
+        let _ = filesystem::remove_file(&temporary_lock_path).await;
         return Err(error);
     }
 
-    match tokio::fs::hard_link(&temporary_lock_path, lock_path).await {
+    match filesystem::hard_link(&temporary_lock_path, lock_path).await {
         Ok(()) => {
-            let _ = tokio::fs::remove_file(&temporary_lock_path).await;
+            let _ = filesystem::remove_file(&temporary_lock_path).await;
             Ok(())
         },
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = tokio::fs::remove_file(&temporary_lock_path).await;
+            let _ = filesystem::remove_file(&temporary_lock_path).await;
             Err(error)
         },
         Err(_) => {
             let result = write_new_lock_file_direct(lock_path, lock_contents).await;
-            let _ = tokio::fs::remove_file(&temporary_lock_path).await;
+            let _ = filesystem::remove_file(&temporary_lock_path).await;
             result
         },
     }
@@ -175,14 +169,9 @@ async fn write_new_lock_file_direct(
     lock_path: &Path,
     lock_contents: &[u8],
 ) -> Result<(), std::io::Error> {
-    let mut file = tokio::fs::OpenOptions::new().write(true).create_new(true).open(lock_path).await?;
-    if let Err(error) = file.write_all(lock_contents).await {
-        let _ = tokio::fs::remove_file(lock_path).await;
-        return Err(error);
-    }
-    if let Err(error) = file.sync_all().await {
-        let _ = tokio::fs::remove_file(lock_path).await;
-        return Err(error);
+    if let Err(err) = filesystem::write_with_sync_all(&lock_path, &lock_contents).await {
+        let _ = filesystem::remove_file(&lock_path).await;
+        return Err(err);
     }
     Ok(())
 }
@@ -211,7 +200,7 @@ pub(crate) async fn reclaim_stale_lock(
     expectation: ReclaimExpectation,
 ) -> Result<ReclaimOutcome, std::io::Error> {
     let quarantine_path = lock_path.with_extension(format!("reclaim-{}", Uuid::new_v4()));
-    match tokio::fs::rename(lock_path, &quarantine_path).await {
+    match filesystem::rename(lock_path, &quarantine_path).await {
         Ok(()) => {},
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(ReclaimOutcome::Missing),
         Err(error) => return Err(error),
@@ -221,11 +210,11 @@ pub(crate) async fn reclaim_stale_lock(
             matches!(read_lock_file(&quarantine_path).ok(), Some(actual) if &actual == observed)
         },
         ReclaimExpectation::UnparseableSnapshot(snapshot) => {
-            matches!(tokio::fs::read(&quarantine_path).await.ok(), Some(bytes) if &bytes == snapshot)
+            matches!(filesystem::read(&quarantine_path).await.ok(), Some(bytes) if &bytes == snapshot)
         },
     };
     if confirmed {
-        let _ = tokio::fs::remove_file(&quarantine_path).await;
+        let _ = filesystem::remove_file(&quarantine_path).await;
         return Ok(ReclaimOutcome::Reclaimed);
     }
     let _ = try_restore_quarantine(&quarantine_path, lock_path).await?;
@@ -242,7 +231,7 @@ pub async fn release_lock_if_owned(
         _ => return Ok(false),
     };
     let quarantine_path = lock_path.with_extension(format!("release-{}", Uuid::new_v4()));
-    match tokio::fs::rename(lock_path, &quarantine_path).await {
+    match filesystem::rename(lock_path, &quarantine_path).await {
         Ok(()) => {},
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(error) => return Err(error),
@@ -250,7 +239,7 @@ pub async fn release_lock_if_owned(
     let parsed = read_lock_file(&quarantine_path).ok();
     let confirmed = matches!(parsed.as_ref(), Some(actual) if actual == &observed);
     if confirmed {
-        let _ = tokio::fs::remove_file(&quarantine_path).await;
+        let _ = filesystem::remove_file(&quarantine_path).await;
         return Ok(true);
     }
     let _ = try_restore_quarantine(&quarantine_path, lock_path).await?;
@@ -263,47 +252,39 @@ pub(crate) async fn try_restore_quarantine(
 ) -> Result<RestoreOutcome, std::io::Error> {
     // Use atomic create-or-fail (hard_link, then create_new fallback) so a fresh lock
     // installed by another owner during our quarantine isn't clobbered by `rename`.
-    match tokio::fs::hard_link(quarantine_path, lock_path).await {
+    match filesystem::hard_link(quarantine_path, lock_path).await {
         Ok(()) => {
-            let _ = tokio::fs::remove_file(quarantine_path).await;
+            let _ = filesystem::remove_file(quarantine_path).await;
             return Ok(RestoreOutcome::Restored);
         },
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = tokio::fs::remove_file(quarantine_path).await;
+            let _ = filesystem::remove_file(quarantine_path).await;
             return Ok(RestoreOutcome::DestinationAlreadyExists);
         },
         Err(_) => {},
     }
 
-    let bytes = match tokio::fs::read(quarantine_path).await {
+    let bytes = match filesystem::read(quarantine_path).await {
         Ok(bytes) => bytes,
         Err(error) => {
-            let _ = tokio::fs::remove_file(quarantine_path).await;
+            let _ = filesystem::remove_file(quarantine_path).await;
             return Err(error);
         },
     };
-    let mut file = match tokio::fs::OpenOptions::new().write(true).create_new(true).open(lock_path).await {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = tokio::fs::remove_file(quarantine_path).await;
-            return Ok(RestoreOutcome::DestinationAlreadyExists);
-        },
-        Err(error) => {
-            let _ = tokio::fs::remove_file(quarantine_path).await;
-            return Err(error);
-        },
-    };
-    if let Err(error) = file.write_all(&bytes).await {
-        let _ = tokio::fs::remove_file(lock_path).await;
-        let _ = tokio::fs::remove_file(quarantine_path).await;
-        return Err(error);
+
+    let lock_file_exists = filesystem::file_exists(lock_path).await.is_ok();
+    if lock_file_exists {
+        let _ = filesystem::remove_file(quarantine_path).await;
+        return Ok(RestoreOutcome::DestinationAlreadyExists);
     }
-    if let Err(error) = file.sync_all().await {
-        let _ = tokio::fs::remove_file(lock_path).await;
-        let _ = tokio::fs::remove_file(quarantine_path).await;
-        return Err(error);
+
+    if let Err(err) = filesystem::write_with_sync_all(&lock_path, &bytes).await {
+        let _ = filesystem::remove_file(lock_path).await;
+        let _ = filesystem::remove_file(quarantine_path).await;
+        return Err(err);
     }
-    let _ = tokio::fs::remove_file(quarantine_path).await;
+    let _ = filesystem::remove_file(quarantine_path).await;
+
     Ok(RestoreOutcome::Restored)
 }
 

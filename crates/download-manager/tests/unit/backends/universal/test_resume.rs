@@ -8,6 +8,8 @@ use wiremock::{
     matchers::{method, path},
 };
 
+use crate::util::filesystem;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_universal_resume_restarts_when_server_ignores_range() -> Result<(), Box<dyn std::error::Error>> {
     let bytes = b"complete file body";
@@ -21,12 +23,17 @@ async fn test_universal_resume_restarts_when_server_ignores_range() -> Result<()
     let temporary_directory = tempdir().unwrap();
     let destination = temporary_directory.path().join("model.bin");
     let part_path = destination.with_extension("part");
-    tokio::fs::write(&part_path, b"partial").await?;
+    filesystem::write(&part_path, b"partial").await?;
 
     let manager =
         <dyn FileDownloadManager>::new(FileDownloadManagerType::Universal, tokio::runtime::Handle::current()).await?;
     let task = manager
-        .file_download_task(&format!("{}/model.bin", server.uri()), &destination, FileCheck::None, Some(bytes.len() as u64))
+        .file_download_task(
+            &format!("{}/model.bin", server.uri()),
+            &destination,
+            FileCheck::None,
+            Some(bytes.len() as u64),
+        )
         .await?;
 
     assert_eq!(task.state().await.phase, FileDownloadPhase::Paused);
@@ -34,6 +41,6 @@ async fn test_universal_resume_restarts_when_server_ignores_range() -> Result<()
     timeout(Duration::from_secs(10), task.wait()).await?;
 
     assert_eq!(task.state().await.phase, FileDownloadPhase::Downloaded);
-    assert_eq!(tokio::fs::read(&destination).await?, bytes);
+    assert_eq!(filesystem::read(&destination).await?, bytes);
     Ok(())
 }

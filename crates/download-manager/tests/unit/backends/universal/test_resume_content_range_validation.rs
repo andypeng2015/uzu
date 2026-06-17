@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase};
+use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase, util::filesystem};
 use tempfile::tempdir;
 use tokio::time::timeout;
 use wiremock::{
@@ -9,8 +9,7 @@ use wiremock::{
 };
 
 #[tokio::test(flavor = "multi_thread")]
-async fn resume_rejects_206_when_content_range_offset_mismatches_request()
--> Result<(), Box<dyn std::error::Error>> {
+async fn resume_rejects_206_when_content_range_offset_mismatches_request() -> Result<(), Box<dyn std::error::Error>> {
     let full_bytes: &[u8] = b"abcdefghij";
     let partial_bytes: &[u8] = b"abcde";
     let total = full_bytes.len();
@@ -29,17 +28,12 @@ async fn resume_rejects_206_when_content_range_offset_mismatches_request()
     let temporary_directory = tempdir().unwrap();
     let destination = temporary_directory.path().join("model.bin");
     let part_path = destination.with_extension("part");
-    tokio::fs::write(&part_path, partial_bytes).await?;
+    filesystem::write(&part_path, partial_bytes).await?;
 
     let manager =
         <dyn FileDownloadManager>::new(FileDownloadManagerType::Universal, tokio::runtime::Handle::current()).await?;
     let task = manager
-        .file_download_task(
-            &format!("{}/model.bin", server.uri()),
-            &destination,
-            FileCheck::None,
-            Some(total as u64),
-        )
+        .file_download_task(&format!("{}/model.bin", server.uri()), &destination, FileCheck::None, Some(total as u64))
         .await?;
 
     assert_eq!(task.state().await.phase, FileDownloadPhase::Paused);
@@ -51,7 +45,7 @@ async fn resume_rejects_206_when_content_range_offset_mismatches_request()
         FileDownloadPhase::Error(_) => Ok(()),
         FileDownloadPhase::Downloaded => {
             assert_eq!(
-                tokio::fs::read(&destination).await?,
+                filesystem::read(&destination).await?,
                 full_bytes,
                 "phase reached Downloaded but file content was corrupted by accepting a misaligned Content-Range",
             );
