@@ -33,14 +33,14 @@ objc2-foundation.workspace = true
 block2.workspace = true
 objc-sys.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 uuid = { workspace = true, features = ["js"] }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio.workspace = true
 tokio-stream.workspace = true
 uuid.workspace = true
