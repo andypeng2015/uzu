@@ -34,7 +34,8 @@ impl<B: Backend> DownloadManager<B> {
     }
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 impl<B: Backend> FileDownloadManager for DownloadManager<B> {
     fn manager_id(&self) -> &str {
         &self.state.manager_id

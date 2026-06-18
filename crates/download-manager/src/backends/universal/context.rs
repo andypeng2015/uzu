@@ -35,7 +35,8 @@ impl UniversalBackendContext {
     }
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 impl BackendContext for UniversalBackendContext {
     type Backend = UniversalBackend;
 

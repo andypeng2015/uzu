@@ -363,3 +363,9 @@ async fn is_process_alive(process_id: u32) -> bool {
     .await
     .unwrap_or(false)
 }
+
+#[cfg(target_family = "wasm")]
+async fn is_process_alive(_process_id: u32) -> bool {
+    // No OS process model in the browser; a lock from another "process" cannot exist.
+    false
+}

@@ -17,7 +17,8 @@ pub enum InitialTaskAttachment<B: Backend> {
     },
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 pub trait Backend: DownloadBackend + Debug + Clone + Send + Sync + Sized + 'static {
     const RESUME_ARTIFACT_EXTENSION: &'static str;
     const SUPPORTS_INITIAL_TASK_ATTACHMENT: bool = false;

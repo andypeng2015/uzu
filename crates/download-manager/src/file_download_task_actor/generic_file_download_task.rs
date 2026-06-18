@@ -204,7 +204,8 @@ impl<B: DownloadBackend> fmt::Debug for GenericFileDownloadTask<B> {
     }
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 impl<B: DownloadBackend> crate::FileDownloadTask for GenericFileDownloadTask<B> {
     fn download_id(&self) -> DownloadId {
         self.config.download_id
@@ -346,7 +347,8 @@ impl<B: DownloadBackend> crate::FileDownloadTask for GenericFileDownloadTask<B> 
     }
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 impl<B: DownloadBackend> ManagedFileDownloadTask for GenericFileDownloadTask<B> {
     async fn shutdown_for_removal(&self) -> Result<(), DownloadError> {
         if self.is_stopped.swap(true, Ordering::SeqCst) {

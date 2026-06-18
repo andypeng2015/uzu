@@ -5,4 +5,5 @@ mod opfilesystem;
 
 pub mod file;
 pub mod filesystem;
+pub mod marker;
 pub mod runtime;

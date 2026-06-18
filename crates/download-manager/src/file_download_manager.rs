@@ -31,7 +31,8 @@ impl Default for FileDownloadManagerType {
     }
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 pub trait FileDownloadManager: Send + Sync + 'static {
     fn manager_id(&self) -> &str;
     fn subscribe_to_all_downloads(&self) -> TokioBroadcastStream<DownloadEvent>;

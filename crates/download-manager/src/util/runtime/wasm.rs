@@ -11,7 +11,7 @@ impl WasmRuntimeHandle {
         WasmRuntimeHandle
     }
 
-    pub fn spawn<F: Future<Output: Send + 'static> + Send + 'static>(
+    pub fn spawn<F: Future<Output: 'static> + 'static>(
         &self,
         future: F,
     ) -> Box<dyn TaskJoinHandle<F::Output>> {
@@ -29,7 +29,7 @@ impl<T> TaskJoinHandle<T> for WasmTaskJoinHandle {
     }
 }
 
-pub fn spawn<F: Future<Output: Send + 'static> + Send + 'static>(future: F) -> Box<dyn TaskJoinHandle<F::Output>> {
+pub fn spawn<F: Future<Output: 'static> + 'static>(future: F) -> Box<dyn TaskJoinHandle<F::Output>> {
     let (abort_handle, abort_registration) = AbortHandle::new_pair();
     let future = Abortable::new(future, abort_registration);
     spawn_local(async move {

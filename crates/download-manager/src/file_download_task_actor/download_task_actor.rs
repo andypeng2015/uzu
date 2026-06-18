@@ -25,6 +25,7 @@ use crate::{
         ActiveDownloadGeneration, ActiveDownloadGenerationCounter, ActiveTask, BackendContext, BackendEventSender,
         DownloadBackend, DownloadConfig,
     },
+    util::runtime,
 };
 
 enum ActorLoopExit {
@@ -635,14 +636,12 @@ async fn validate_completed_file(config: &DownloadConfig) -> Result<u64, String>
         FileCheck::CRC(expected_crc) => {
             let destination = config.destination.clone();
             let expected = expected_crc.clone();
-            let crc_result = tokio::task::spawn_blocking(move || calculate_and_verify_crc(&destination, &expected))
-                .await
-                .map_err(|error| format!("CRC verification error: {error}"))?;
+            let crc_result = runtime::run_blocking(move || calculate_and_verify_crc(&destination, &expected)).await;
             match crc_result {
                 Ok(true) => {
                     let destination = config.destination.clone();
                     let expected = expected_crc.clone();
-                    let _ = tokio::task::spawn_blocking(move || save_crc_file(&destination, &expected)).await;
+                    let _ = runtime::run_blocking(move || save_crc_file(&destination, &expected)).await;
                     Ok(total_bytes)
                 },
                 Ok(false) => Err("CRC verification failed".to_string()),

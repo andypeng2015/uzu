@@ -2,6 +2,7 @@ use crate::{
     CheckedFileState, FileState,
     crc_utils::{calculate_and_verify_crc, crc_cache_matches},
     reducer::{Action, ActionPlan, DiskObservation},
+    util::runtime,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -50,10 +51,7 @@ async fn validate_crc_with_cache(
 
     let destination = observation.destination_path.clone();
     let expected = expected_crc.to_string();
-    let crc_check = tokio::task::spawn_blocking(move || calculate_and_verify_crc(&destination, &expected))
-        .await
-        .ok()
-        .and_then(|inner| inner.ok());
+    let crc_check = runtime::run_blocking(move || calculate_and_verify_crc(&destination, &expected)).await.ok();
 
     match crc_check {
         Some(true) => (
