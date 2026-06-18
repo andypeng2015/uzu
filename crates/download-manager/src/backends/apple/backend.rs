@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc};
 use objc2_foundation::NSURLSessionTaskState;
 
 use crate::{
-    DownloadError,
+    DownloadError, RuntimeHandle,
     backends::{
         apple::{
             AppleActiveTask, AppleBackendContext, AppleBackendError, resume_data_parser, task_ext::AppleDownloadTaskExt,
@@ -36,8 +36,8 @@ impl common::Backend for AppleBackend {
         "apple"
     }
 
-    fn create_context(tokio_handle: tokio::runtime::Handle) -> Result<Self::Context, DownloadError> {
-        Ok(AppleBackendContext::new(tokio_handle))
+    fn create_context(runtime_handle: RuntimeHandle) -> Result<Self::Context, DownloadError> {
+        Ok(AppleBackendContext::new(runtime_handle))
     }
 
     async fn initial_task_attachment(

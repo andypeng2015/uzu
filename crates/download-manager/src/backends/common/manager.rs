@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use tokio::runtime::Handle as TokioHandle;
 use tokio_stream::wrappers::BroadcastStream as TokioBroadcastStream;
 
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     file_download_task_actor::GenericFileDownloadTask,
     lock_manager::{DestinationLockLease, lock_path_for_destination},
     reducer::InitialLifecycleState,
+    util::runtime::RuntimeHandle,
 };
 
 #[derive(Clone, Debug)]
@@ -21,8 +21,8 @@ pub struct DownloadManager<B: Backend> {
 }
 
 impl<B: Backend> DownloadManager<B> {
-    pub fn from_tokio_handle(tokio_handle: TokioHandle) -> Result<Self, DownloadError> {
-        let context = B::create_context(tokio_handle.clone())?;
+    pub fn from_runtime_handle(runtime_handle: RuntimeHandle) -> Result<Self, DownloadError> {
+        let context = B::create_context(runtime_handle)?;
         let state = DownloadManagerState::new(B::manager_suffix());
         log(DownloadLogEvent::ManagerCreated {
             manager_id: state.manager_id.clone(),

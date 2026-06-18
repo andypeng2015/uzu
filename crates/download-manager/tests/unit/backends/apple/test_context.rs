@@ -1,18 +1,15 @@
 use std::sync::Arc;
 
 use mock_registry::{Behavior, MockRegistry};
-use tokio::{
-    runtime::Handle as TokioHandle,
-    sync::{
-        Mutex as TokioMutex,
-        mpsc::{Receiver as TokioMpscReceiver, channel as tokio_mpsc_channel},
-        watch::channel as tokio_watch_channel,
-    },
+use tokio::sync::{
+    Mutex as TokioMutex,
+    mpsc::{Receiver as TokioMpscReceiver, channel as tokio_mpsc_channel},
+    watch::channel as tokio_watch_channel,
 };
 use uuid::Uuid;
 
 use crate::{
-    FileCheck,
+    FileCheck, RuntimeHandle,
     backends::apple::AppleBackendContext,
     compute_download_id,
     file_download_task_actor::{BackendEvent, PendingProgressSlot},
@@ -40,7 +37,7 @@ async fn test_apple_resume_empty_resume_data_starts_fresh_download() -> Result<(
     let resume_artifact_path = destination.with_extension("resume_data");
     filesystem::write(&resume_artifact_path, b"").await?;
 
-    let context = AppleBackendContext::new(TokioHandle::current());
+    let context = AppleBackendContext::new(RuntimeHandle::current());
     let config = Arc::new(DownloadConfig {
         download_id: compute_download_id(&destination),
         source_url: served_file.file.url.clone(),
@@ -86,7 +83,7 @@ async fn dropping_apple_active_task_unregisters_event_sink() -> Result<(), Box<d
     let temporary_directory = tempfile::tempdir()?;
     let destination = temporary_directory.path().join(&served_file.file.name);
 
-    let context = AppleBackendContext::new(TokioHandle::current());
+    let context = AppleBackendContext::new(RuntimeHandle::current());
     let download_id = compute_download_id(&destination);
     let config = Arc::new(DownloadConfig {
         download_id,
@@ -133,7 +130,7 @@ async fn registry_distinguishes_generations_for_same_download_id() -> Result<(),
     let destination = temporary_directory.path().join(&served_file.file.name);
     let download_id = compute_download_id(&destination);
 
-    let context = AppleBackendContext::new(TokioHandle::current());
+    let context = AppleBackendContext::new(RuntimeHandle::current());
     let config = Arc::new(DownloadConfig {
         download_id,
         source_url: served_file.file.url.clone(),
@@ -188,7 +185,7 @@ async fn claim_cancels_mismatched_task() -> Result<(), Box<dyn std::error::Error
     let destination = temporary_directory.path().join(&served_file.file.name);
     let download_id = compute_download_id(&destination);
 
-    let context = AppleBackendContext::new(TokioHandle::current());
+    let context = AppleBackendContext::new(RuntimeHandle::current());
     let original_config = Arc::new(DownloadConfig {
         download_id,
         source_url: served_file.file.url.clone(),

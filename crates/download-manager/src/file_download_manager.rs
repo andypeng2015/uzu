@@ -1,13 +1,13 @@
 use std::{path::Path, sync::Arc};
 
-use tokio::{runtime::Handle as TokioHandle, sync::broadcast::Sender as TokioBroadcastSender};
+use tokio::sync::broadcast::Sender as TokioBroadcastSender;
 use tokio_stream::wrappers::BroadcastStream as TokioBroadcastStream;
 
 #[cfg(target_vendor = "apple")]
 use crate::backends::apple::AppleDownloadManager;
 use crate::{
     DownloadError, DownloadId, FileCheck, FileDownloadEvent, FileDownloadTask,
-    backends::universal::UniversalDownloadManager,
+    backends::universal::UniversalDownloadManager, util::runtime::RuntimeHandle,
 };
 
 pub type DownloadEvent = (DownloadId, FileDownloadEvent);
@@ -63,24 +63,24 @@ pub trait FileDownloadManager: Send + Sync + 'static {
 impl dyn FileDownloadManager {
     pub async fn new(
         file_download_manager_type: FileDownloadManagerType,
-        tokio_handle: TokioHandle,
+        runtime_handle: RuntimeHandle,
     ) -> Result<Box<dyn FileDownloadManager>, DownloadError> {
         match file_download_manager_type {
             FileDownloadManagerType::Universal => {
                 let manager: Box<dyn FileDownloadManager> =
-                    Box::new(UniversalDownloadManager::from_tokio_handle(tokio_handle)?);
+                    Box::new(UniversalDownloadManager::from_runtime_handle(runtime_handle)?);
                 Ok(manager)
             },
             #[cfg(target_vendor = "apple")]
             FileDownloadManagerType::Apple => {
                 let manager: Box<dyn FileDownloadManager> =
-                    Box::new(AppleDownloadManager::from_tokio_handle(tokio_handle)?);
+                    Box::new(AppleDownloadManager::from_runtime_handle(runtime_handle)?);
                 Ok(manager)
             },
         }
     }
 
-    pub async fn system_default(tokio_handle: TokioHandle) -> Result<Box<dyn FileDownloadManager>, DownloadError> {
-        Self::new(FileDownloadManagerType::default(), tokio_handle).await
+    pub async fn system_default(runtime_handle: RuntimeHandle) -> Result<Box<dyn FileDownloadManager>, DownloadError> {
+        Self::new(FileDownloadManagerType::default(), runtime_handle).await
     }
 }

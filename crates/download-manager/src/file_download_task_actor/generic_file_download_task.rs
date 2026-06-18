@@ -8,15 +8,12 @@ use std::{
     },
 };
 
-use tokio::{
-    sync::{
-        Mutex as TokioMutex,
-        broadcast::{Sender as TokioBroadcastSender, channel as tokio_broadcast_channel},
-        mpsc::{Sender as TokioMpscSender, channel as tokio_mpsc_channel},
-        oneshot::channel as tokio_oneshot_channel,
-        watch::{Receiver as TokioWatchReceiver, channel as tokio_watch_channel},
-    },
-    task::JoinHandle as TokioJoinHandle,
+use tokio::sync::{
+    Mutex as TokioMutex,
+    broadcast::{Sender as TokioBroadcastSender, channel as tokio_broadcast_channel},
+    mpsc::{Sender as TokioMpscSender, channel as tokio_mpsc_channel},
+    oneshot::channel as tokio_oneshot_channel,
+    watch::{Receiver as TokioWatchReceiver, channel as tokio_watch_channel},
 };
 use tokio_stream::{StreamExt as TokioStreamExt, wrappers::BroadcastStream as TokioBroadcastStream};
 
@@ -32,6 +29,7 @@ use crate::{
     lock_manager::DestinationLockLease,
     reducer::InitialLifecycleState,
     traits::{ActiveDownloadGenerationCounter, BackendEventSender, DownloadBackend, DownloadConfig},
+    util::{runtime, runtime::TaskJoinHandle},
 };
 
 pub struct GenericFileDownloadTask<B: DownloadBackend> {
@@ -40,7 +38,7 @@ pub struct GenericFileDownloadTask<B: DownloadBackend> {
     public_state_receiver: TokioWatchReceiver<FileDownloadState>,
     progress_sender: TokioBroadcastSender<FileDownloadState>,
     terminal_receiver: TokioWatchReceiver<TerminalOutcome>,
-    listener_task: Arc<TokioMutex<Option<TokioJoinHandle<()>>>>,
+    listener_task: Arc<TokioMutex<Option<Box<dyn TaskJoinHandle<()>>>>>,
     is_stopped: AtomicBool,
     backend: PhantomData<B>,
 }
@@ -152,7 +150,7 @@ impl<B: DownloadBackend> GenericFileDownloadTask<B> {
             progress_sender.clone(),
             terminal_sender,
         );
-        tokio::spawn(actor.run());
+        runtime::spawn(actor.run());
 
         Ok(Self {
             config,
@@ -269,7 +267,7 @@ impl<B: DownloadBackend> crate::FileDownloadTask for GenericFileDownloadTask<B> 
         let download_id = self.config.download_id;
         let destination = self.config.destination.clone();
         let mut local_stream = TokioBroadcastStream::new(self.progress_sender.subscribe());
-        *listener_task = Some(tokio::spawn(async move {
+        *listener_task = Some(runtime::spawn(async move {
             let mut last_downloaded_bytes = 0u64;
 
             while let Some(result) = local_stream.next().await {
@@ -326,7 +324,6 @@ impl<B: DownloadBackend> crate::FileDownloadTask for GenericFileDownloadTask<B> 
     async fn stop_listening(&self) {
         if let Some(listener_task) = self.listener_task.lock().await.take() {
             listener_task.abort();
-            let _ = listener_task.await;
         }
     }
 

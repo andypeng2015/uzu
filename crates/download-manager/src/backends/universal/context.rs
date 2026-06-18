@@ -9,27 +9,26 @@ use reqwest::{
     StatusCode,
     header::{CONTENT_LENGTH, CONTENT_RANGE, RANGE},
 };
-use tokio::runtime::Handle as TokioHandle;
 
 use crate::{
     backends::universal::{UniversalActiveTask, UniversalBackend, UniversalBackendError},
     file_download_task_actor::BackendEvent,
     lock_manager::DestinationLockLease,
     traits::{ActiveDownloadGeneration, BackendContext, BackendEventSender, DownloadConfig},
-    util::{file::PartFile, filesystem},
+    util::{file::PartFile, filesystem, runtime::RuntimeHandle},
 };
 
 #[derive(Clone, Debug)]
 pub struct UniversalBackendContext {
-    tokio_handle: TokioHandle,
+    runtime_handle: RuntimeHandle,
     pub retries: u16,
     pub progress_interval_ms: u64,
 }
 
 impl UniversalBackendContext {
-    pub fn new(tokio_handle: TokioHandle) -> Self {
+    pub fn new(runtime_handle: RuntimeHandle) -> Self {
         Self {
-            tokio_handle,
+            runtime_handle,
             retries: 3,
             progress_interval_ms: 500,
         }
@@ -77,7 +76,7 @@ impl UniversalBackendContext {
 
         let retry_count = self.retries;
         let progress_interval = Duration::from_millis(self.progress_interval_ms);
-        let task_handle = self.tokio_handle.spawn(download_streaming(
+        let task_handle = self.runtime_handle.spawn(download_streaming(
             config,
             generation,
             resume_artifact_path.clone(),

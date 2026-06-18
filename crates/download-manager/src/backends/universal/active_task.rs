@@ -1,14 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use tokio::task::JoinHandle as TokioJoinHandle;
-
 use crate::{
     backends::universal::UniversalBackend,
     traits::{ActiveTask, CancelOutcome, DownloadBackend},
+    util::runtime::TaskJoinHandle,
 };
 
 pub struct UniversalActiveTask {
-    task_handles: Box<[TokioJoinHandle<()>]>,
+    task_handles: Box<[Box<dyn TaskJoinHandle<()>>]>,
     resume_artifact_path: PathBuf,
 }
 
@@ -26,7 +25,7 @@ impl std::fmt::Debug for UniversalActiveTask {
 
 impl UniversalActiveTask {
     pub fn new(
-        task_handles: Box<[TokioJoinHandle<()>]>,
+        task_handles: Box<[Box<dyn TaskJoinHandle<()>>]>,
         resume_artifact_path: PathBuf,
     ) -> Self {
         Self {
@@ -54,7 +53,6 @@ impl ActiveTask for UniversalActiveTask {
     ) -> Result<PathBuf, <Self::Backend as DownloadBackend>::Error> {
         for task_handle in std::mem::take(&mut self.task_handles) {
             task_handle.abort();
-            let _ = task_handle.await;
         }
         Ok(std::mem::take(&mut self.resume_artifact_path))
     }
@@ -65,7 +63,6 @@ impl ActiveTask for UniversalActiveTask {
     ) -> CancelOutcome {
         for task_handle in std::mem::take(&mut self.task_handles) {
             task_handle.abort();
-            let _ = task_handle.await;
         }
         CancelOutcome::BestEffort
     }

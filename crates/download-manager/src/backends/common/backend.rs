@@ -1,11 +1,10 @@
 use std::{fmt::Debug, sync::Arc};
 
-use tokio::runtime::Handle as TokioHandle;
-
 use crate::{
     DownloadError,
     lock_manager::DestinationLockLease,
     traits::{ActiveDownloadGeneration, BackendEventSender, DownloadBackend, DownloadConfig},
+    util::runtime::RuntimeHandle,
 };
 
 pub enum InitialTaskAttachment<B: Backend> {
@@ -25,7 +24,7 @@ pub trait Backend: DownloadBackend + Debug + Clone + Send + Sync + Sized + 'stat
 
     fn manager_suffix() -> &'static str;
 
-    fn create_context(tokio_handle: TokioHandle) -> Result<Self::Context, DownloadError>;
+    fn create_context(runtime_handle: RuntimeHandle) -> Result<Self::Context, DownloadError>;
 
     async fn initial_task_attachment(
         _context: &Self::Context,

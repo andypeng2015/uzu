@@ -37,6 +37,7 @@ pub use file_state::FileState;
 pub use lock_file_info::LockFileInfo;
 pub use lock_file_state::LockFileState;
 pub use lock_manager::{acquire_lock, check_lock_file, release_lock_if_owned, try_acquire_lock};
+pub use util::runtime::RuntimeHandle;
 
 pub type DownloadId = uuid::Uuid;
 pub fn compute_download_id(destination_path: &std::path::Path) -> DownloadId {

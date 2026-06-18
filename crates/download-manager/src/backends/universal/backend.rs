@@ -5,6 +5,7 @@ use crate::{
         universal::{UniversalActiveTask, UniversalBackendContext, UniversalBackendError},
     },
     traits::DownloadBackend,
+    util::runtime::RuntimeHandle,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -23,7 +24,7 @@ impl common::Backend for UniversalBackend {
         "universal"
     }
 
-    fn create_context(tokio_handle: tokio::runtime::Handle) -> Result<Self::Context, DownloadError> {
-        Ok(UniversalBackendContext::new(tokio_handle))
+    fn create_context(runtime_handle: RuntimeHandle) -> Result<Self::Context, DownloadError> {
+        Ok(UniversalBackendContext::new(runtime_handle))
     }
 }

@@ -1,7 +1,6 @@
 use chrono::Utc;
-use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase};
+use download_manager::{FileCheck, FileDownloadManager, FileDownloadManagerType, FileDownloadPhase, RuntimeHandle};
 use tempfile::tempdir;
-use tokio::runtime::Handle as TokioHandle;
 
 use crate::{common::MockRegistry, util::filesystem};
 
@@ -155,6 +154,6 @@ async fn manager_task(
     file_check: FileCheck,
     expected_bytes: Option<u64>,
 ) -> Result<std::sync::Arc<dyn download_manager::FileDownloadTask>, download_manager::DownloadError> {
-    let manager = <dyn FileDownloadManager>::new(FileDownloadManagerType::Universal, TokioHandle::current()).await?;
+    let manager = <dyn FileDownloadManager>::new(FileDownloadManagerType::Universal, RuntimeHandle::current()).await?;
     manager.file_download_task(source_url, destination, file_check, expected_bytes).await
 }
