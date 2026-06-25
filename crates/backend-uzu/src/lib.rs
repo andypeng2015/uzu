@@ -9,7 +9,7 @@ mod encodable_block;
 mod forward_pass;
 mod language_model;
 mod parameters;
-mod speculators;
+pub mod speculators;
 mod trie;
 mod utils;
 
